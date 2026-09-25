@@ -12,12 +12,14 @@ import (
 type Record map[string]any
 
 type Violation struct {
-	RuleID   string `json:"rule"`
-	Path     string `json:"path"`
-	Severity string `json:"severity"`
-	Action   string `json:"action"`
-	Message  string `json:"message"`
-	Value    any    `json:"value,omitempty"`
+	RuleID       string `json:"rule"`
+	RuleVersion  string `json:"rule_version"`
+	Path         string `json:"path"`
+	Severity     string `json:"severity"`
+	Action       string `json:"action"`
+	Message      string `json:"message"`
+	SuggestedFix string `json:"suggested_fix,omitempty"`
+	Value        any    `json:"value,omitempty"`
 }
 
 func Check(c contract.Contract, record Record) []Violation {
@@ -31,9 +33,13 @@ func Check(c contract.Contract, record Record) []Violation {
 				severity = "error"
 			}
 			violations = append(violations, Violation{
-				RuleID: rule.ID, Path: rule.Path, Severity: severity,
-				Action: rule.OnBreach.Action, Message: message, Value: value,
+				RuleID: rule.ID, RuleVersion: rule.Version, Path: rule.Path,
+				Severity: severity, Action: rule.OnBreach.Action, Message: message,
+				Value: value,
 			})
+			if violations[len(violations)-1].RuleVersion == "" {
+				violations[len(violations)-1].RuleVersion = "1"
+			}
 		}
 	}
 	return violations

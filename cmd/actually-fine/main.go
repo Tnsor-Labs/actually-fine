@@ -10,32 +10,13 @@ import (
 
 	"github.com/Tnsor-Labs/actually-fine/contract"
 	"github.com/Tnsor-Labs/actually-fine/engine"
+	"github.com/Tnsor-Labs/actually-fine/result"
 )
-
-const (
-	exitCleared = 0
-	exitBreach  = 1
-	exitInvalid = 2
-	exitRuntime = 3
-	exitPolicy  = 4
-)
-
-type event struct {
-	Status   string `json:"status"`
-	Line     int    `json:"line"`
-	Contract string `json:"contract"`
-	Rule     string `json:"rule,omitempty"`
-	Path     string `json:"path,omitempty"`
-	Severity string `json:"severity,omitempty"`
-	Action   string `json:"action,omitempty"`
-	Message  string `json:"message,omitempty"`
-	Value    any    `json:"value,omitempty"`
-}
 
 func main() {
 	if len(os.Args) < 2 || os.Args[1] != "run" {
 		fmt.Fprintln(os.Stderr, "usage: actually-fine run --contract contract.json [--input file] [options]")
-		os.Exit(exitInvalid)
+		os.Exit(int(result.InvalidContract))
 	}
 	os.Exit(run(os.Args[2:]))
 }
@@ -50,50 +31,50 @@ func run(args []string) int {
 	resultsPath := flags.String("results", "", "JSONL breach event output file")
 	format := flags.String("format", "human", "human or jsonl")
 	if err := flags.Parse(args); err != nil {
-		return exitInvalid
+		return int(result.InvalidContract)
 	}
 	if *contractPath == "" {
 		fmt.Fprintln(os.Stderr, "--contract is required")
-		return exitInvalid
+		return int(result.InvalidContract)
 	}
 	if *format != "human" && *format != "jsonl" {
 		fmt.Fprintln(os.Stderr, "--format must be human or jsonl")
-		return exitInvalid
+		return int(result.InvalidContract)
 	}
 
 	contractData, err := os.ReadFile(*contractPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "read contract: %v\n", err)
-		return exitInvalid
+		return int(result.InvalidContract)
 	}
 	c, err := contract.Decode(contractData)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid contract: %v\n", err)
-		return exitInvalid
+		return int(result.InvalidContract)
 	}
 
 	in, closeInput, err := openInput(*inputPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open input: %v\n", err)
-		return exitRuntime
+		return int(result.RuntimeFailure)
 	}
 	defer closeInput()
 	valid, closeValid, err := createOutput(*validPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open valid output: %v\n", err)
-		return exitRuntime
+		return int(result.RuntimeFailure)
 	}
 	defer closeValid()
 	quarantine, closeQuarantine, err := createOutput(*quarantinePath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open quarantine output: %v\n", err)
-		return exitRuntime
+		return int(result.RuntimeFailure)
 	}
 	defer closeQuarantine()
 	results, closeResults, err := createOutput(*resultsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "open results output: %v\n", err)
-		return exitRuntime
+		return int(result.RuntimeFailure)
 	}
 	defer closeResults()
 
@@ -106,7 +87,7 @@ func run(args []string) int {
 		var record engine.Record
 		if err := json.Unmarshal(line, &record); err != nil {
 			fmt.Fprintf(os.Stderr, "invalid JSON at line %d: %v\n", lineNumber, err)
-			return exitRuntime
+			return int(result.RuntimeFailure)
 		}
 		total++
 		violations := engine.Check(c, record)
@@ -122,24 +103,16 @@ func run(args []string) int {
 				shouldHalt = true
 			}
 			if results != nil {
-				status := "breach"
-				if violation.Action == "warn" {
-					status = "warning"
-				}
-				e := event{Status: status, Line: lineNumber, Contract: c.Metadata.ID, Rule: violation.RuleID, Path: violation.Path, Severity: violation.Severity, Action: violation.Action, Message: violation.Message, Value: violation.Value}
-				if err := json.NewEncoder(results).Encode(e); err != nil {
+				e := makeEvent(c, record, lineNumber, violation)
+				if err := writeEvent(results, e); err != nil {
 					fmt.Fprintf(os.Stderr, "write result: %v\n", err)
-					return exitRuntime
+					return int(result.RuntimeFailure)
 				}
 			}
 			if *format == "jsonl" {
-				status := "breach"
-				if violation.Action == "warn" {
-					status = "warning"
-				}
-				e := event{Status: status, Line: lineNumber, Contract: c.Metadata.ID, Rule: violation.RuleID, Path: violation.Path, Severity: violation.Severity, Action: violation.Action, Message: violation.Message, Value: violation.Value}
-				if err := json.NewEncoder(os.Stdout).Encode(e); err != nil {
-					return exitRuntime
+				e := makeEvent(c, record, lineNumber, violation)
+				if err := writeEvent(os.Stdout, e); err != nil {
+					return int(result.RuntimeFailure)
 				}
 			}
 		}
@@ -148,7 +121,7 @@ func run(args []string) int {
 			if valid != nil {
 				if _, err := valid.Write(append(line, '\n')); err != nil {
 					fmt.Fprintf(os.Stderr, "write valid output: %v\n", err)
-					return exitRuntime
+					return int(result.RuntimeFailure)
 				}
 			}
 		} else if shouldQuarantine {
@@ -156,7 +129,7 @@ func run(args []string) int {
 			if quarantine != nil {
 				if _, err := quarantine.Write(append(line, '\n')); err != nil {
 					fmt.Fprintf(os.Stderr, "write quarantine output: %v\n", err)
-					return exitRuntime
+					return int(result.RuntimeFailure)
 				}
 			}
 		} else {
@@ -168,15 +141,37 @@ func run(args []string) int {
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "read input: %v\n", err)
-		return exitRuntime
+		return int(result.RuntimeFailure)
 	}
 	if *format == "human" {
 		fmt.Fprintf(os.Stdout, "contract: %s\nrecords: %d\ncleared: %d\nquarantined: %d\nbreached: %d\n", c.Metadata.ID, total, cleared, quarantined, breached)
 	}
 	if quarantined > 0 || breached > 0 {
-		return exitBreach
+		return int(result.Breach)
 	}
-	return exitCleared
+	return int(result.Cleared)
+}
+
+func makeEvent(c contract.Contract, record engine.Record, line int, violation engine.Violation) result.Event {
+	status := "breach"
+	if violation.Action == "warn" {
+		status = "warning"
+	}
+	return result.Event{
+		ResultVersion: result.Version, Status: status, ContractID: c.Metadata.ID,
+		ContractVersion: c.Metadata.Version, RuleID: violation.RuleID,
+		RuleVersion: violation.RuleVersion, Line: line, RecordID: record["id"],
+		Path: violation.Path, Severity: violation.Severity, Action: violation.Action,
+		Message: violation.Message, SuggestedFix: violation.SuggestedFix,
+		Value: violation.Value,
+	}
+}
+
+func writeEvent(writer io.Writer, event result.Event) error {
+	if err := event.Validate(); err != nil {
+		return err
+	}
+	return json.NewEncoder(writer).Encode(event)
 }
 
 func openInput(path string) (io.Reader, func(), error) {

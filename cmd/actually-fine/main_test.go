@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Tnsor-Labs/actually-fine/result"
 )
 
 func TestRunRoutesQuarantineAndAcceptedRecords(t *testing.T) {
@@ -30,8 +32,8 @@ func TestRunRoutesQuarantineAndAcceptedRecords(t *testing.T) {
 		"--quarantine-output", quarantinePath,
 		"--results", resultsPath,
 	})
-	if status != exitBreach {
-		t.Fatalf("run() status = %d, want %d", status, exitBreach)
+	if status != int(result.Breach) {
+		t.Fatalf("run() status = %d, want %d", status, result.Breach)
 	}
 	valid, err := os.ReadFile(validPath)
 	if err != nil {

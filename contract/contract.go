@@ -27,6 +27,7 @@ type Input struct {
 
 type Rule struct {
 	ID        string    `json:"id"`
+	Version   string    `json:"version,omitempty"`
 	Kind      string    `json:"kind"`
 	Path      string    `json:"path"`
 	Predicate Predicate `json:"predicate"`
@@ -67,6 +68,9 @@ func (c Contract) Validate() error {
 			return fmt.Errorf("rule ids must be present and unique: %q", r.ID)
 		}
 		seen[r.ID] = true
+		if r.Version != "" && r.Version != "1" {
+			return fmt.Errorf("rule %q: unsupported version %q", r.ID, r.Version)
+		}
 		if r.Kind != "record" {
 			return fmt.Errorf("rule %q: kind must be %q", r.ID, "record")
 		}

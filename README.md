@@ -150,8 +150,11 @@ machines:
 }
 ```
 
-The exact result schema is part of the work ahead and will be versioned with
-the IR.
+The result schema is versioned independently from the contract IR.
+
+The current result protocol is documented in
+[`docs/result-protocol.md`](docs/result-protocol.md). It defines versioned,
+flat JSONL events and stable process exit codes.
 
 ## Benchmarks
 
