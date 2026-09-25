@@ -61,6 +61,16 @@ The current MVP supports required fields, types, email format, regular
 expressions, numeric ranges, and enum membership. Supported actions are
 `warn`, `reject`, `quarantine`, and `halt`.
 
+Inspect or validate a contract artifact without reading data:
+
+```bash
+./actually-fine validate --contract testdata/orders.contract.json
+./actually-fine inspect --contract testdata/orders.contract.json
+```
+
+`validate` checks the IR and prints its stable digest. `inspect` prints the
+canonical normalized JSON used to calculate that digest.
+
 ## Why
 
 Data quality tooling should not require a platform before it can validate one
@@ -94,6 +104,10 @@ contract semantics. They will compile to the same versioned, canonical IR.
 
 The IR can be committed, reviewed, diffed, signed, cached, transported, and
 replayed without the original SDK source.
+
+See [`docs/contract-ir.md`](docs/contract-ir.md) and the
+[IR v1.0 schema](schema/contract-ir-1.0.json) for the current artifact
+definition.
 
 ```text
 authoring API -> canonical contract IR -> engine -> decision and evidence

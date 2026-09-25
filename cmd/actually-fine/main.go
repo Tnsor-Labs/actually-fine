@@ -14,11 +14,27 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 || os.Args[1] != "run" {
-		fmt.Fprintln(os.Stderr, "usage: actually-fine run --contract contract.json [--input file] [options]")
+	if len(os.Args) < 2 {
+		printUsage()
 		os.Exit(int(result.InvalidContract))
 	}
-	os.Exit(run(os.Args[2:]))
+	var status int
+	switch os.Args[1] {
+	case "run":
+		status = run(os.Args[2:])
+	case "validate":
+		status = validateContract(os.Args[2:])
+	case "inspect":
+		status = inspectContract(os.Args[2:])
+	default:
+		printUsage()
+		status = int(result.InvalidContract)
+	}
+	os.Exit(status)
+}
+
+func printUsage() {
+	fmt.Fprintln(os.Stderr, "usage: actually-fine <run|validate|inspect> --contract contract.json [options]")
 }
 
 func run(args []string) int {
@@ -42,12 +58,7 @@ func run(args []string) int {
 		return int(result.InvalidContract)
 	}
 
-	contractData, err := os.ReadFile(*contractPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "read contract: %v\n", err)
-		return int(result.InvalidContract)
-	}
-	c, err := contract.Decode(contractData)
+	c, err := readContract(*contractPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "invalid contract: %v\n", err)
 		return int(result.InvalidContract)
@@ -150,6 +161,69 @@ func run(args []string) int {
 		return int(result.Breach)
 	}
 	return int(result.Cleared)
+}
+
+func validateContract(args []string) int {
+	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	contractPath := flags.String("contract", "", "contract IR JSON file")
+	if err := flags.Parse(args); err != nil {
+		return int(result.InvalidContract)
+	}
+	if *contractPath == "" {
+		fmt.Fprintln(os.Stderr, "--contract is required")
+		return int(result.InvalidContract)
+	}
+	c, err := readContract(*contractPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid contract: %v\n", err)
+		return int(result.InvalidContract)
+	}
+	digest, err := contract.Digest(c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "digest contract: %v\n", err)
+		return int(result.InvalidContract)
+	}
+	fmt.Fprintf(os.Stdout, "valid contract: %s@%s\ndigest: %s\n", c.Metadata.ID, c.Metadata.Version, digest)
+	return int(result.Cleared)
+}
+
+func inspectContract(args []string) int {
+	flags := flag.NewFlagSet("inspect", flag.ContinueOnError)
+	flags.SetOutput(os.Stderr)
+	contractPath := flags.String("contract", "", "contract IR JSON file")
+	if err := flags.Parse(args); err != nil {
+		return int(result.InvalidContract)
+	}
+	if *contractPath == "" {
+		fmt.Fprintln(os.Stderr, "--contract is required")
+		return int(result.InvalidContract)
+	}
+	c, err := readContract(*contractPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid contract: %v\n", err)
+		return int(result.InvalidContract)
+	}
+	canonical, err := contract.CanonicalJSON(c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "canonicalize contract: %v\n", err)
+		return int(result.InvalidContract)
+	}
+	digest, err := contract.Digest(c)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "digest contract: %v\n", err)
+		return int(result.InvalidContract)
+	}
+	fmt.Fprintf(os.Stdout, "digest: %s\n%s\n", digest, canonical)
+	return int(result.Cleared)
+}
+
+func readContract(path string) (contract.Contract, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return contract.Contract{}, fmt.Errorf("read contract: %w", err)
+	}
+	return contract.Decode(data)
 }
 
 func makeEvent(c contract.Contract, record engine.Record, line int, violation engine.Violation) result.Event {
