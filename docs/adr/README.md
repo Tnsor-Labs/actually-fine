@@ -20,3 +20,4 @@ specifications.
 | [0003](0003-portable-rules-and-extensions.md) | Portable rules and runtime extensions | Proposed |
 | [0004](0004-engine-implementation-language.md) | Engine implementation language | Proposed |
 | [0005](0005-zero-dependency-core.md) | Zero-dependency core and layered execution modes | Accepted |
+| [0006](0006-mvp-scope-and-engine.md) | MVP scope and engine selection | Accepted |

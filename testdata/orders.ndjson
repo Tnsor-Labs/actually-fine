@@ -1,0 +1,4 @@
+{"id":"1","email":"one@example.com","amount":12.50}
+{"id":"2","email":"bad-email","amount":20}
+{"email":"three@example.com","amount":4}
+{"id":"4","email":"four@example.com","amount":-1}

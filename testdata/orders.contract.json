@@ -1,0 +1,50 @@
+{
+  "ir_version": "1.0",
+  "contract": {
+    "id": "orders",
+    "version": "1"
+  },
+  "input": {
+    "kind": "record-stream"
+  },
+  "rules": [
+    {
+      "id": "id-required",
+      "kind": "record",
+      "path": "$.id",
+      "predicate": {
+        "op": "required"
+      },
+      "on_breach": {
+        "severity": "error",
+        "action": "reject"
+      }
+    },
+    {
+      "id": "email-valid",
+      "kind": "record",
+      "path": "$.email",
+      "predicate": {
+        "op": "format",
+        "format": "email"
+      },
+      "on_breach": {
+        "severity": "error",
+        "action": "quarantine"
+      }
+    },
+    {
+      "id": "amount-positive",
+      "kind": "record",
+      "path": "$.amount",
+      "predicate": {
+        "op": "range",
+        "min": 0
+      },
+      "on_breach": {
+        "severity": "error",
+        "action": "reject"
+      }
+    }
+  ]
+}

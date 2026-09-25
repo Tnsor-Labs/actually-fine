@@ -17,8 +17,12 @@ an important integration target, not a dependency or boundary for the engine.
 
 ## Status
 
-Early architecture phase. The repository currently contains the initial
-architecture decisions. The implementation will be built in this order:
+Early MVP. The repository now contains a working Go engine and CLI for
+versioned contracts over newline-delimited JSON. The remaining work is to
+expand the contract model, harden the output compatibility guarantees, and add
+integrations.
+
+The project is being built in this order:
 
 1. Define and validate the contract intermediate representation (IR).
 2. Build and test the engine against the IR.
@@ -28,6 +32,34 @@ architecture decisions. The implementation will be built in this order:
 
 The API, IR, rule vocabulary, and implementation language are not all final.
 See [`docs/adr/`](docs/adr/) for decisions and open questions.
+
+## Quick Start
+
+Build the binary:
+
+```bash
+go build -o actually-fine ./cmd/actually-fine
+```
+
+Validate an NDJSON stream:
+
+```bash
+./actually-fine run \
+  --contract testdata/orders.contract.json \
+  --input testdata/orders.ndjson \
+  --valid-output accepted.ndjson \
+  --quarantine-output rejected.ndjson \
+  --results violations.jsonl
+```
+
+The CLI writes accepted records and quarantined records to separate streams,
+and returns a non-zero status when the input breaches the contract. Use
+`--format jsonl` when the caller needs breach events on stdout instead of a
+human summary.
+
+The current MVP supports required fields, types, email format, regular
+expressions, numeric ranges, and enum membership. Supported actions are
+`warn`, `reject`, `quarantine`, and `halt`.
 
 ## Why
 
@@ -121,6 +153,18 @@ machines:
 The exact result schema is part of the work ahead and will be versioned with
 the IR.
 
+## Benchmarks
+
+The native engine benchmark is under [`bench/`](bench/). Run it with:
+
+```bash
+go test ./engine -bench BenchmarkCheck -benchmem -count=5
+```
+
+An optional Great Expectations comparison helper reports whether a pinned GX
+environment is available. Comparisons should use equivalent rules and input
+workloads; the current environment does not include Great Expectations.
+
 ## Planned Interfaces
 
 The initial product is the engine and CLI. Future interfaces may include:
@@ -156,6 +200,7 @@ Read the [Architecture Decision Records](docs/adr/README.md), beginning with:
 - [Portable rules and runtime extensions](docs/adr/0003-portable-rules-and-extensions.md)
 - [Engine implementation language](docs/adr/0004-engine-implementation-language.md)
 - [Zero-dependency core](docs/adr/0005-zero-dependency-core.md)
+- [MVP scope and engine selection](docs/adr/0006-mvp-scope-and-engine.md)
 
 ## Contributing
 
