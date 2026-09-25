@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 
 	"github.com/Tnsor-Labs/actually-fine/contract"
 	"github.com/Tnsor-Labs/actually-fine/engine"
@@ -46,6 +48,7 @@ func run(args []string) int {
 	quarantinePath := flags.String("quarantine-output", "", "quarantined NDJSON output file")
 	resultsPath := flags.String("results", "", "JSONL breach event output file")
 	format := flags.String("format", "human", "human or jsonl")
+	invalidAction := flags.String("invalid-record", "fail", "invalid JSON policy: fail or quarantine")
 	if err := flags.Parse(args); err != nil {
 		return int(result.InvalidContract)
 	}
@@ -55,6 +58,10 @@ func run(args []string) int {
 	}
 	if *format != "human" && *format != "jsonl" {
 		fmt.Fprintln(os.Stderr, "--format must be human or jsonl")
+		return int(result.InvalidContract)
+	}
+	if *invalidAction != "fail" && *invalidAction != "quarantine" {
+		fmt.Fprintln(os.Stderr, "--invalid-record must be fail or quarantine")
 		return int(result.InvalidContract)
 	}
 
@@ -91,19 +98,66 @@ func run(args []string) int {
 
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 64*1024), 16*1024*1024)
-	lineNumber, total, cleared, quarantined, breached := 0, 0, 0, 0, 0
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		if closer, ok := in.(io.Closer); ok {
+			_ = closer.Close()
+		}
+	}()
+	lineNumber, total, cleared, quarantined, breached, warnings := 0, 0, 0, 0, 0, 0
+	interrupted, halted := false, false
 	for scanner.Scan() {
+		if ctx.Err() != nil {
+			interrupted = true
+			break
+		}
 		lineNumber++
 		line := scanner.Bytes()
+		total++
 		var record engine.Record
-		if err := json.Unmarshal(line, &record); err != nil {
-			fmt.Fprintf(os.Stderr, "invalid JSON at line %d: %v\n", lineNumber, err)
+		parseErr := json.Unmarshal(line, &record)
+		if parseErr == nil && record == nil {
+			parseErr = fmt.Errorf("record must be a JSON object")
+		}
+		if parseErr != nil {
+			if *invalidAction == "quarantine" {
+				quarantined++
+				if quarantine != nil {
+					if err := writeLine(quarantine, line); err != nil {
+						fmt.Fprintf(os.Stderr, "write quarantine output: %v\n", err)
+						return int(result.RuntimeFailure)
+					}
+				}
+				e := result.Event{
+					ResultVersion: result.Version, Status: "breach", ContractID: c.Metadata.ID,
+					ContractVersion: c.Metadata.Version, RuleID: "input.parse", RuleVersion: "1",
+					Line: lineNumber, Path: "$", Severity: "error", Action: "quarantine",
+					Message: fmt.Sprintf("invalid JSON input: %v", parseErr),
+				}
+				if results != nil {
+					if err := writeEvent(results, e); err != nil {
+						fmt.Fprintf(os.Stderr, "write result: %v\n", err)
+						return int(result.RuntimeFailure)
+					}
+				}
+				if *format == "jsonl" {
+					if err := writeEvent(os.Stdout, e); err != nil {
+						return int(result.RuntimeFailure)
+					}
+				}
+				continue
+			}
+			fmt.Fprintf(os.Stderr, "invalid JSON at line %d: %v\n", lineNumber, parseErr)
 			return int(result.RuntimeFailure)
 		}
-		total++
 		violations := engine.Check(c, record)
 		hasBreach, shouldQuarantine, shouldHalt := false, false, false
 		for _, violation := range violations {
+			if violation.Action == "warn" {
+				warnings++
+			}
 			if violation.Action != "warn" {
 				hasBreach = true
 			}
@@ -130,7 +184,7 @@ func run(args []string) int {
 		if !hasBreach {
 			cleared++
 			if valid != nil {
-				if _, err := valid.Write(append(line, '\n')); err != nil {
+				if err := writeLine(valid, line); err != nil {
 					fmt.Fprintf(os.Stderr, "write valid output: %v\n", err)
 					return int(result.RuntimeFailure)
 				}
@@ -138,7 +192,7 @@ func run(args []string) int {
 		} else if shouldQuarantine {
 			quarantined++
 			if quarantine != nil {
-				if _, err := quarantine.Write(append(line, '\n')); err != nil {
+				if err := writeLine(quarantine, line); err != nil {
 					fmt.Fprintf(os.Stderr, "write quarantine output: %v\n", err)
 					return int(result.RuntimeFailure)
 				}
@@ -147,6 +201,7 @@ func run(args []string) int {
 			breached++
 		}
 		if shouldHalt {
+			halted = true
 			break
 		}
 	}
@@ -155,7 +210,10 @@ func run(args []string) int {
 		return int(result.RuntimeFailure)
 	}
 	if *format == "human" {
-		fmt.Fprintf(os.Stdout, "contract: %s\nrecords: %d\ncleared: %d\nquarantined: %d\nbreached: %d\n", c.Metadata.ID, total, cleared, quarantined, breached)
+		fmt.Fprintf(os.Stdout, "contract: %s\nrecords: %d\ncleared: %d\nwarnings: %d\nquarantined: %d\nbreached: %d\nhalted: %t\ninterrupted: %t\n", c.Metadata.ID, total, cleared, warnings, quarantined, breached, halted, interrupted)
+	}
+	if interrupted {
+		return int(result.RuntimeFailure)
 	}
 	if quarantined > 0 || breached > 0 {
 		return int(result.Breach)
@@ -246,6 +304,14 @@ func writeEvent(writer io.Writer, event result.Event) error {
 		return err
 	}
 	return json.NewEncoder(writer).Encode(event)
+}
+
+func writeLine(writer io.Writer, line []byte) error {
+	if _, err := writer.Write(line); err != nil {
+		return err
+	}
+	_, err := writer.Write([]byte{'\n'})
+	return err
 }
 
 func openInput(path string) (io.Reader, func(), error) {

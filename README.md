@@ -170,6 +170,9 @@ The current result protocol is documented in
 [`docs/result-protocol.md`](docs/result-protocol.md). It defines versioned,
 flat JSONL events and stable process exit codes.
 
+Streaming behavior, malformed-record policies, action semantics, and output
+ordering are documented in [`docs/streaming.md`](docs/streaming.md).
+
 ## Benchmarks
 
 The native engine benchmark is under [`bench/`](bench/). Run it with:
