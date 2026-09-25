@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/mail"
 	"regexp"
@@ -25,6 +27,9 @@ type Violation struct {
 func Check(c contract.Contract, record Record) []Violation {
 	violations := make([]Violation, 0)
 	for _, rule := range c.Rules {
+		if rule.Kind != "record" {
+			continue
+		}
 		value, present := lookup(record, rule.Path)
 		message, failed := evaluate(rule, value, present)
 		if failed {
@@ -32,14 +37,7 @@ func Check(c contract.Contract, record Record) []Violation {
 			if severity == "" {
 				severity = "error"
 			}
-			violations = append(violations, Violation{
-				RuleID: rule.ID, RuleVersion: rule.Version, Path: rule.Path,
-				Severity: severity, Action: rule.OnBreach.Action, Message: message,
-				Value: value,
-			})
-			if violations[len(violations)-1].RuleVersion == "" {
-				violations[len(violations)-1].RuleVersion = "1"
-			}
+			violations = append(violations, violation(rule, message, value, severity))
 		}
 	}
 	return violations
@@ -68,8 +66,21 @@ func evaluate(rule contract.Rule, value any, present bool) (string, bool) {
 	p := rule.Predicate
 	switch p.Op {
 	case "required":
-		if !present || value == nil || (value == "") {
-			return "field is required", true
+		if !present {
+			return "field is missing", true
+		}
+		if value == nil {
+			return "field must not be null", true
+		}
+		if value == "" {
+			return "field must not be empty", true
+		}
+	case "not_null":
+		if !present {
+			return "field is missing", true
+		}
+		if value == nil {
+			return "field must not be null", true
 		}
 	case "type":
 		if !present || value == nil || !typeMatches(value, p.Type) {
@@ -96,7 +107,7 @@ func evaluate(rule contract.Rule, value any, present bool) (string, bool) {
 	case "enum":
 		matched := false
 		for _, allowed := range p.Values {
-			if fmt.Sprint(allowed) == fmt.Sprint(value) {
+			if equalJSON(allowed, value) {
 				matched = true
 				break
 			}
@@ -108,6 +119,90 @@ func evaluate(rule contract.Rule, value any, present bool) (string, bool) {
 		return fmt.Sprintf("unsupported predicate %q", p.Op), true
 	}
 	return "", false
+}
+
+func violation(rule contract.Rule, message string, value any, severity string) Violation {
+	if rule.Version == "" {
+		rule.Version = "1"
+	}
+	return Violation{
+		RuleID: rule.ID, RuleVersion: rule.Version, Path: rule.Path,
+		Severity: severity, Action: rule.OnBreach.Action, Message: message,
+		Value: value,
+	}
+}
+
+func equalJSON(left, right any) bool {
+	leftJSON, leftErr := json.Marshal(left)
+	rightJSON, rightErr := json.Marshal(right)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftJSON, rightJSON)
+}
+
+// StreamChecker evaluates record rules immediately and maintains only the
+// state required by stream rules for the current execution.
+type StreamChecker struct {
+	contract contract.Contract
+	seen     map[string]map[string]struct{}
+	count    int
+}
+
+func NewStreamChecker(c contract.Contract) *StreamChecker {
+	return &StreamChecker{contract: c, seen: make(map[string]map[string]struct{})}
+}
+
+func (s *StreamChecker) Check(record Record) []Violation {
+	s.count++
+	violations := Check(s.contract, record)
+	for _, rule := range s.contract.Rules {
+		if rule.Kind != "stream" || rule.Predicate.Op != "unique" {
+			continue
+		}
+		value, present := lookup(record, rule.Path)
+		if !present {
+			violations = append(violations, violation(rule, "field is missing and cannot be unique", value, severity(rule)))
+			continue
+		}
+		if value == nil {
+			violations = append(violations, violation(rule, "field is null and cannot be unique", value, severity(rule)))
+			continue
+		}
+		keyBytes, err := json.Marshal(value)
+		if err != nil {
+			violations = append(violations, violation(rule, "value cannot be compared for uniqueness", value, severity(rule)))
+			continue
+		}
+		if s.seen[rule.ID] == nil {
+			s.seen[rule.ID] = make(map[string]struct{})
+		}
+		key := string(keyBytes)
+		if _, exists := s.seen[rule.ID][key]; exists {
+			violations = append(violations, violation(rule, "value was already seen in this stream", value, severity(rule)))
+			continue
+		}
+		s.seen[rule.ID][key] = struct{}{}
+	}
+	return violations
+}
+
+func (s *StreamChecker) Finalize() []Violation {
+	violations := make([]Violation, 0)
+	for _, rule := range s.contract.Rules {
+		if rule.Kind != "stream" || rule.Predicate.Op != "count" {
+			continue
+		}
+		count := float64(s.count)
+		if (rule.Predicate.Min != nil && count < *rule.Predicate.Min) || (rule.Predicate.Max != nil && count > *rule.Predicate.Max) {
+			violations = append(violations, violation(rule, fmt.Sprintf("stream count %d is outside the allowed range", s.count), s.count, severity(rule)))
+		}
+	}
+	return violations
+}
+
+func severity(rule contract.Rule) string {
+	if rule.OnBreach.Severity == "" {
+		return "error"
+	}
+	return rule.OnBreach.Severity
 }
 
 func typeMatches(value any, expected string) bool {

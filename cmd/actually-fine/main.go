@@ -108,6 +108,7 @@ func run(args []string) int {
 	}()
 	lineNumber, total, cleared, quarantined, breached, warnings := 0, 0, 0, 0, 0, 0
 	interrupted, halted := false, false
+	checker := engine.NewStreamChecker(c)
 	for scanner.Scan() {
 		if ctx.Err() != nil {
 			interrupted = true
@@ -152,7 +153,7 @@ func run(args []string) int {
 			fmt.Fprintf(os.Stderr, "invalid JSON at line %d: %v\n", lineNumber, parseErr)
 			return int(result.RuntimeFailure)
 		}
-		violations := engine.Check(c, record)
+		violations := checker.Check(record)
 		hasBreach, shouldQuarantine, shouldHalt := false, false, false
 		for _, violation := range violations {
 			if violation.Action == "warn" {
@@ -209,6 +210,27 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "read input: %v\n", err)
 		return int(result.RuntimeFailure)
 	}
+	if !interrupted && !halted {
+		for _, violation := range checker.Finalize() {
+			if violation.Action == "warn" {
+				warnings++
+			} else {
+				breached++
+			}
+			e := makeEvent(c, engine.Record{}, max(1, lineNumber), violation)
+			if results != nil {
+				if err := writeEvent(results, e); err != nil {
+					fmt.Fprintf(os.Stderr, "write result: %v\n", err)
+					return int(result.RuntimeFailure)
+				}
+			}
+			if *format == "jsonl" {
+				if err := writeEvent(os.Stdout, e); err != nil {
+					return int(result.RuntimeFailure)
+				}
+			}
+		}
+	}
 	if *format == "human" {
 		fmt.Fprintf(os.Stdout, "contract: %s\nrecords: %d\ncleared: %d\nwarnings: %d\nquarantined: %d\nbreached: %d\nhalted: %t\ninterrupted: %t\n", c.Metadata.ID, total, cleared, warnings, quarantined, breached, halted, interrupted)
 	}
@@ -219,6 +241,13 @@ func run(args []string) int {
 		return int(result.Breach)
 	}
 	return int(result.Cleared)
+}
+
+func max(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func validateContract(args []string) int {

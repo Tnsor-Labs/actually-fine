@@ -105,6 +105,24 @@ func TestRunHaltStopsWithoutReadingLaterRecords(t *testing.T) {
 	}
 }
 
+func TestRunEmitsFinalStreamRuleViolation(t *testing.T) {
+	dir := t.TempDir()
+	contractPath := writeTestFile(t, dir, "contract.json", `{"ir_version":"1.0","contract":{"id":"test","version":"1"},"input":{"kind":"record-stream"},"rules":[{"id":"minimum-count","kind":"stream","path":"$","predicate":{"op":"count","min":3},"on_breach":{"action":"reject"}}]}`)
+	inputPath := writeTestFile(t, dir, "input.ndjson", "{\"id\":\"1\"}\n{\"id\":\"2\"}\n")
+	resultsPath := filepath.Join(dir, "results.jsonl")
+	status := run([]string{"--contract", contractPath, "--input", inputPath, "--results", resultsPath})
+	if status != int(result.Breach) {
+		t.Fatalf("run() status = %d, want %d", status, result.Breach)
+	}
+	results, err := os.ReadFile(resultsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(results, []byte(`"rule_id":"minimum-count"`)) {
+		t.Fatalf("missing final stream result: %s", results)
+	}
+}
+
 func writeTestFile(t *testing.T, dir, name, contents string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

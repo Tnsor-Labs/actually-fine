@@ -75,8 +75,8 @@ func (c Contract) Validate() error {
 		if r.Version != "" && r.Version != "1" {
 			return fmt.Errorf("rule %q: unsupported version %q", r.ID, r.Version)
 		}
-		if r.Kind != "record" {
-			return fmt.Errorf("rule %q: kind must be %q", r.ID, "record")
+		if r.Kind != "record" && r.Kind != "stream" {
+			return fmt.Errorf("rule %q: kind must be record or stream", r.ID)
 		}
 		if r.Path == "" || (r.Path != "$" && !strings.HasPrefix(r.Path, "$.")) {
 			return fmt.Errorf("rule %q: path must be $ or start with $.", r.ID)
@@ -85,16 +85,28 @@ func (c Contract) Validate() error {
 			return fmt.Errorf("rule %q: predicate.op is required", r.ID)
 		}
 		switch r.Predicate.Op {
-		case "required":
+		case "required", "not_null":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: %s must be a record rule", r.ID, r.Predicate.Op)
+			}
 		case "type":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: type must be a record rule", r.ID)
+			}
 			if r.Predicate.Type != "string" && r.Predicate.Type != "number" && r.Predicate.Type != "integer" && r.Predicate.Type != "boolean" && r.Predicate.Type != "object" && r.Predicate.Type != "array" {
 				return fmt.Errorf("rule %q: unsupported type %q", r.ID, r.Predicate.Type)
 			}
 		case "format":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: format must be a record rule", r.ID)
+			}
 			if r.Predicate.Format != "email" {
 				return fmt.Errorf("rule %q: unsupported format %q", r.ID, r.Predicate.Format)
 			}
 		case "regex":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: regex must be a record rule", r.ID)
+			}
 			if r.Predicate.Pattern == "" {
 				return fmt.Errorf("rule %q: regex pattern is required", r.ID)
 			}
@@ -102,6 +114,9 @@ func (c Contract) Validate() error {
 				return fmt.Errorf("rule %q: invalid regex: %w", r.ID, err)
 			}
 		case "range":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: range must be a record rule", r.ID)
+			}
 			if r.Predicate.Min == nil && r.Predicate.Max == nil {
 				return fmt.Errorf("rule %q: range requires min or max", r.ID)
 			}
@@ -109,8 +124,28 @@ func (c Contract) Validate() error {
 				return fmt.Errorf("rule %q: range min cannot exceed max", r.ID)
 			}
 		case "enum":
+			if r.Kind != "record" {
+				return fmt.Errorf("rule %q: enum must be a record rule", r.ID)
+			}
 			if len(r.Predicate.Values) == 0 {
 				return fmt.Errorf("rule %q: enum values are required", r.ID)
+			}
+		case "unique":
+			if r.Kind != "stream" {
+				return fmt.Errorf("rule %q: unique must be a stream rule", r.ID)
+			}
+		case "count":
+			if r.Kind != "stream" {
+				return fmt.Errorf("rule %q: count must be a stream rule", r.ID)
+			}
+			if r.Path != "$" {
+				return fmt.Errorf("rule %q: count path must be $", r.ID)
+			}
+			if r.Predicate.Min == nil && r.Predicate.Max == nil {
+				return fmt.Errorf("rule %q: count requires min or max", r.ID)
+			}
+			if r.Predicate.Min != nil && r.Predicate.Max != nil && *r.Predicate.Min > *r.Predicate.Max {
+				return fmt.Errorf("rule %q: count min cannot exceed max", r.ID)
 			}
 		default:
 			return fmt.Errorf("rule %q: unsupported predicate %q", r.ID, r.Predicate.Op)

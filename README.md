@@ -57,9 +57,13 @@ and returns a non-zero status when the input breaches the contract. Use
 `--format jsonl` when the caller needs breach events on stdout instead of a
 human summary.
 
-The current MVP supports required fields, types, email format, regular
-expressions, numeric ranges, and enum membership. Supported actions are
-`warn`, `reject`, `quarantine`, and `halt`.
+The current MVP supports required fields, null checks, types, email format,
+regular expressions, numeric ranges, enum membership, stream uniqueness, and
+record counts. Supported actions are `warn`, `reject`, `quarantine`, and
+`halt`.
+
+The complete MVP rule semantics are documented in
+[`docs/rules.md`](docs/rules.md).
 
 Inspect or validate a contract artifact without reading data:
 

@@ -1,0 +1,37 @@
+{
+  "ir_version": "1.0",
+  "contract": {
+    "id": "unique-events",
+    "version": "1"
+  },
+  "input": {
+    "kind": "record-stream"
+  },
+  "rules": [
+    {
+      "id": "event-id-unique",
+      "kind": "stream",
+      "path": "$.event_id",
+      "predicate": {
+        "op": "unique"
+      },
+      "on_breach": {
+        "severity": "error",
+        "action": "quarantine"
+      }
+    },
+    {
+      "id": "minimum-records",
+      "kind": "stream",
+      "path": "$",
+      "predicate": {
+        "op": "count",
+        "min": 1
+      },
+      "on_breach": {
+        "severity": "error",
+        "action": "reject"
+      }
+    }
+  ]
+}

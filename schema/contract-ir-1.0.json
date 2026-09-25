@@ -34,14 +34,14 @@
         "properties": {
           "id": {"type": "string", "minLength": 1},
           "version": {"type": "string", "const": "1", "default": "1"},
-          "kind": {"const": "record"},
+          "kind": {"enum": ["record", "stream"]},
           "path": {"type": "string", "pattern": "^\\$(\\.|$)"},
           "predicate": {
             "type": "object",
             "additionalProperties": false,
             "required": ["op"],
             "properties": {
-              "op": {"enum": ["required", "type", "format", "regex", "range", "enum"]},
+              "op": {"enum": ["required", "not_null", "type", "format", "regex", "range", "enum", "unique", "count"]},
               "type": {"enum": ["string", "number", "integer", "boolean", "object", "array"]},
               "format": {"const": "email"},
               "pattern": {"type": "string"},
