@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import json
 import statistics
 import time
 
@@ -38,6 +39,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--input", help="NDJSON input file; otherwise generate rows")
 parser.add_argument("--rows", type=int, default=100_000)
 parser.add_argument("--iterations", type=int, default=5)
+parser.add_argument("--json", action="store_true", help="emit one JSON result")
 args = parser.parse_args()
 
 load_start = time.perf_counter()
@@ -72,10 +74,25 @@ for _ in range(args.iterations):
     timings.append(time.perf_counter() - start)
 
 median_seconds = statistics.median(timings)
-print(f"Great Expectations {gx.__version__}")
-print(f"backend=pandas rows={len(dataframe)} rules={len(expectations)}")
-print(f"load_seconds={load_seconds:.6f}")
-print(f"setup_seconds={setup_seconds:.6f}")
-print(f"warm_median_seconds={median_seconds:.6f}")
-print(f"warm_rows_per_second={len(dataframe) / median_seconds:.0f}")
-print(f"success={all(result.success for result in results)}")
+output = {
+    "gx_version": gx.__version__,
+    "backend": "pandas",
+    "rows": len(dataframe),
+    "rules": len(expectations),
+    "load_seconds": load_seconds,
+    "setup_seconds": setup_seconds,
+    "warm_samples_seconds": timings,
+    "warm_median_seconds": median_seconds,
+    "warm_rows_per_second": len(dataframe) / median_seconds,
+    "success": all(result.success for result in results),
+}
+if args.json:
+    print(json.dumps(output, sort_keys=True))
+else:
+    print(f"Great Expectations {gx.__version__}")
+    print(f"backend=pandas rows={len(dataframe)} rules={len(expectations)}")
+    print(f"load_seconds={load_seconds:.6f}")
+    print(f"setup_seconds={setup_seconds:.6f}")
+    print(f"warm_median_seconds={median_seconds:.6f}")
+    print(f"warm_rows_per_second={len(dataframe) / median_seconds:.0f}")
+    print(f"success={all(result.success for result in results)}")
