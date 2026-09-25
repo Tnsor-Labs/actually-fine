@@ -155,6 +155,7 @@ Read the [Architecture Decision Records](docs/adr/README.md), beginning with:
 - [Single repository for SDKs](docs/adr/0002-single-repository-for-sdks.md)
 - [Portable rules and runtime extensions](docs/adr/0003-portable-rules-and-extensions.md)
 - [Engine implementation language](docs/adr/0004-engine-implementation-language.md)
+- [Zero-dependency core](docs/adr/0005-zero-dependency-core.md)
 
 ## Contributing
 

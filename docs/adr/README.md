@@ -19,3 +19,4 @@ specifications.
 | [0002](0002-single-repository-for-sdks.md) | Single repository for SDKs | Accepted |
 | [0003](0003-portable-rules-and-extensions.md) | Portable rules and runtime extensions | Proposed |
 | [0004](0004-engine-implementation-language.md) | Engine implementation language | Proposed |
+| [0005](0005-zero-dependency-core.md) | Zero-dependency core and layered execution modes | Accepted |
