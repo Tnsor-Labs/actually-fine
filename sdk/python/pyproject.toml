@@ -9,5 +9,8 @@ description = "Python authoring SDK for actually-fine data contracts"
 requires-python = ">=3.9"
 license = { file = "../../../LICENSE" }
 
+[project.optional-dependencies]
+test = ["pytest>=8,<9"]
+
 [tool.setuptools.packages.find]
 where = ["."]
