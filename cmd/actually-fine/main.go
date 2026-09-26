@@ -15,6 +15,12 @@ import (
 	"github.com/Tnsor-Labs/actually-fine/result"
 )
 
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -28,6 +34,9 @@ func main() {
 		status = validateContract(os.Args[2:])
 	case "inspect":
 		status = inspectContract(os.Args[2:])
+	case "version":
+		printVersion()
+		status = int(result.Cleared)
 	default:
 		printUsage()
 		status = int(result.InvalidContract)
@@ -36,7 +45,11 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Fprintln(os.Stderr, "usage: actually-fine <run|validate|inspect> --contract contract.json [options]")
+	fmt.Fprintln(os.Stderr, "usage: actually-fine <run|validate|inspect|version> --contract contract.json [options]")
+}
+
+func printVersion() {
+	fmt.Printf("actually-fine %s (commit %s, built %s)\n", version, commit, date)
 }
 
 func run(args []string) int {

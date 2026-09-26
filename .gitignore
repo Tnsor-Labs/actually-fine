@@ -1,6 +1,7 @@
 /bench/__pycache__/
 *.py[cod]
 /actually-fine
+/dist/
 /sdk/python/.pytest_cache/
 /sdk/python/build/
 /sdk/python/*.egg-info/

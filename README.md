@@ -41,6 +41,13 @@ Build the binary:
 go build -o actually-fine ./cmd/actually-fine
 ```
 
+Released binaries are available from the GitHub Releases page. To inspect a
+binary's build metadata:
+
+```bash
+./actually-fine version
+```
+
 Validate an NDJSON stream:
 
 ```bash
