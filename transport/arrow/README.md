@@ -11,6 +11,21 @@ Run its tests from this directory:
 go test ./...
 ```
 
+The Brokoli-facing batch gate is available from the same optional module:
+
+```go
+summary, err := arrow.RunGate(arrow.GateRequest{
+    Contract: contract,
+    Input: inputArrowIPC,
+    Accepted: acceptedArrowIPC,
+    Quarantined: quarantineArrowIPC,
+    Evidence: publishEvidence,
+})
+```
+
+This path evaluates Arrow record batches directly and does not serialize rows
+through NDJSON.
+
 The root module intentionally does not include Arrow, so the standalone CLI
 and core engine remain dependency-light:
 

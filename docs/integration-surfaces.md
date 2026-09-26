@@ -67,7 +67,9 @@ cannot preserve per-record evidence or the `quarantine` and `halt` actions.
 For high-throughput deployments, `transport/arrow` provides the optional
 `arrow-ipc/v1` codec. It is a host-neutral nested Go module so the standalone
 CLI and core engine retain their dependency-light build. Brokoli is the first
-consumer, while other adapters can opt into the same codec independently.
+consumer, while other adapters can opt into the same codec independently. Its
+Arrow gate path evaluates record batches directly and emits accepted and
+quarantined Arrow batches without an NDJSON conversion.
 
 ## SDKs
 

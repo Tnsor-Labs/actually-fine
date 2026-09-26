@@ -4,6 +4,7 @@
 package arrow
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math"
@@ -14,6 +15,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory"
 
 	"github.com/Tnsor-Labs/actually-fine/engine"
+	"github.com/Tnsor-Labs/actually-fine/transport"
 )
 
 const Codec = "arrow-ipc/v1"
@@ -21,6 +23,131 @@ const Codec = "arrow-ipc/v1"
 type Dataset struct {
 	Columns []string
 	Rows    []engine.Record
+}
+
+// BatchReader exposes Arrow record batches without an intermediate NDJSON
+// representation. The returned values use the same logical value mapping as
+// Decode.
+type BatchReader struct {
+	reader  *ipc.Reader
+	columns []string
+}
+
+func NewBatchReader(r io.Reader) (*BatchReader, error) {
+	reader, err := ipc.NewReader(r, ipc.WithAllocator(memory.DefaultAllocator))
+	if err != nil {
+		return nil, fmt.Errorf("open arrow ipc stream: %w", err)
+	}
+	columns := make([]string, 0, len(reader.Schema().Fields()))
+	for _, field := range reader.Schema().Fields() {
+		columns = append(columns, field.Name)
+	}
+	return &BatchReader{reader: reader, columns: columns}, nil
+}
+
+func (r *BatchReader) Next(ctx context.Context) (transport.RecordBatch, error) {
+	if err := ctx.Err(); err != nil {
+		return transport.RecordBatch{}, err
+	}
+	if !r.reader.Next() {
+		if err := r.reader.Err(); err != nil && err != io.EOF {
+			return transport.RecordBatch{}, fmt.Errorf("read arrow ipc stream: %w", err)
+		}
+		return transport.RecordBatch{}, io.EOF
+	}
+	record := r.reader.Record()
+	rows := make([]map[string]any, 0, record.NumRows())
+	for row := int64(0); row < record.NumRows(); row++ {
+		out := make(map[string]any, len(r.columns))
+		for column, values := range record.Columns() {
+			value, err := valueAt(values, int(row))
+			if err != nil {
+				return transport.RecordBatch{}, fmt.Errorf("column %q row %d: %w", r.columns[column], len(rows), err)
+			}
+			out[r.columns[column]] = value
+		}
+		rows = append(rows, out)
+	}
+	return transport.RecordBatch{Columns: append([]string(nil), r.columns...), Records: rows}, nil
+}
+
+func (r *BatchReader) Close() error {
+	r.reader.Release()
+	return nil
+}
+
+// BatchWriter emits one Arrow IPC stream containing all batches written to
+// it. The first batch establishes the output schema; later batches must use
+// the same columns and compatible logical value types.
+type BatchWriter struct {
+	writer *ipc.Writer
+	output io.Writer
+	schema *arrowgo.Schema
+	fields []string
+	kinds  []string
+}
+
+func NewBatchWriter(w io.Writer) *BatchWriter {
+	return &BatchWriter{writer: nil, output: w}
+}
+
+func (w *BatchWriter) Write(ctx context.Context, batch transport.RecordBatch) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if w.writer == nil {
+		if w.output == nil {
+			return fmt.Errorf("arrow batch writer has no output")
+		}
+		w.fields = append([]string(nil), batch.Columns...)
+		w.kinds = make([]string, len(w.fields))
+		fields := make([]arrowgo.Field, len(w.fields))
+		for i, column := range w.fields {
+			kind := "string"
+			for _, row := range batch.Records {
+				if value, ok := row[column]; ok && value != nil {
+					kind = valueKind(value)
+					break
+				}
+			}
+			w.kinds[i] = kind
+			fields[i] = arrowgo.Field{Name: column, Type: typeFor(kind), Nullable: true}
+		}
+		schema := arrowgo.NewSchema(fields, nil)
+		w.schema = schema
+		w.writer = ipc.NewWriter(w.output, ipc.WithSchema(schema))
+	} else if len(batch.Columns) != len(w.fields) {
+		return fmt.Errorf("arrow batch columns changed from %d to %d", len(w.fields), len(batch.Columns))
+	} else {
+		for i := range w.fields {
+			if batch.Columns[i] != w.fields[i] {
+				return fmt.Errorf("arrow batch column %d changed from %q to %q", i, w.fields[i], batch.Columns[i])
+			}
+		}
+	}
+
+	builder := array.NewRecordBuilder(memory.DefaultAllocator, w.schema)
+	defer builder.Release()
+	for _, row := range batch.Records {
+		for column, name := range w.fields {
+			appendValue(builder.Field(column), w.kinds[column], row[name])
+		}
+	}
+	record := builder.NewRecord()
+	defer record.Release()
+	if err := w.writer.Write(record); err != nil {
+		return fmt.Errorf("write arrow batch: %w", err)
+	}
+	return nil
+}
+
+func (w *BatchWriter) Close() error {
+	if w.writer == nil {
+		return nil
+	}
+	err := w.writer.Close()
+	w.writer = nil
+	return err
 }
 
 // Decode reads an Arrow IPC stream into the engine's logical record shape.
