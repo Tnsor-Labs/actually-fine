@@ -1,9 +1,9 @@
-# Brokoli Arrow Codec
+# Arrow IPC Transport
 
-This optional nested module reads and writes Brokoli's `arrow-ipc/v1` dataset
+This optional nested module reads and writes the `arrow-ipc/v1` dataset
 transport. It maps Arrow values into the same logical record types used by the
 engine and preserves integer identifiers exactly, including values above
-`2^53`.
+`2^53`. Brokoli is the first consumer, but the transport is host-neutral.
 
 Run its tests from this directory:
 

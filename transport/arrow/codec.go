@@ -1,6 +1,6 @@
-// Package arrow provides the optional Arrow IPC transport for the Brokoli
-// gate. It is kept below the adapter boundary so contract and engine remain
-// independent of Arrow.
+// Package arrow provides the optional Arrow IPC transport. It is kept below
+// the transport boundary so contract and engine remain independent of Arrow;
+// Brokoli is one consumer of this package, not its owner.
 package arrow
 
 import (

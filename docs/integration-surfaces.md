@@ -64,10 +64,10 @@ those callbacks. This is deliberately separate from Brokoli's existing
 `quality_check` node: that node uses a different materialized rule model and
 cannot preserve per-record evidence or the `quarantine` and `halt` actions.
 
-For high-throughput deployments, `adapter/brokoli/arrow` provides the optional
-`arrow-ipc/v1` codec. It is a nested Go module so the standalone CLI and core
-engine retain their dependency-light build; an Arrow-capable Brokoli plugin
-can opt into the codec and test it independently.
+For high-throughput deployments, `transport/arrow` provides the optional
+`arrow-ipc/v1` codec. It is a host-neutral nested Go module so the standalone
+CLI and core engine retain their dependency-light build. Brokoli is the first
+consumer, while other adapters can opt into the same codec independently.
 
 ## SDKs
 

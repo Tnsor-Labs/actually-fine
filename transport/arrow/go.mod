@@ -1,4 +1,4 @@
-module github.com/Tnsor-Labs/actually-fine/adapter/brokoli/arrow
+module github.com/Tnsor-Labs/actually-fine/transport/arrow
 
 go 1.22.0
 
@@ -24,4 +24,4 @@ require (
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 )
 
-replace github.com/Tnsor-Labs/actually-fine => ../../..
+replace github.com/Tnsor-Labs/actually-fine => ../..
