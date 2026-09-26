@@ -57,6 +57,13 @@ The first integration should expose a Brokoli quality gate that:
 - Publishes result events as run evidence.
 - Does not import Brokoli types into `contract`, `engine`, or `result`.
 
+The initial host boundary is `adapter/brokoli`. Its `Run` function accepts a
+contract, an NDJSON reader, record-routing callbacks, and an evidence callback.
+A Brokoli plugin owns the small conversion from its dataset/evidence APIs to
+those callbacks. This is deliberately separate from Brokoli's existing
+`quality_check` node: that node uses a different materialized rule model and
+cannot preserve per-record evidence or the `quarantine` and `halt` actions.
+
 ## SDKs
 
 SDKs are compilers and authoring experiences. They may offer typed builders,
