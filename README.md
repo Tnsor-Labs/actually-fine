@@ -236,5 +236,5 @@ until it is implemented and tested.
 
 ## License
 
-The intended project model is free and open source. The license is still an
-explicit project decision and has not yet been selected.
+This project is licensed under the Apache License, Version 2.0. See
+[`LICENSE`](LICENSE).
