@@ -225,6 +225,7 @@ Read the [Architecture Decision Records](docs/adr/README.md), beginning with:
 - [Engine implementation language](docs/adr/0004-engine-implementation-language.md)
 - [Zero-dependency core](docs/adr/0005-zero-dependency-core.md)
 - [MVP scope and engine selection](docs/adr/0006-mvp-scope-and-engine.md)
+- [Post-MVP integration surfaces](docs/adr/0007-post-mvp-integration-surfaces.md)
 
 ## Contributing
 

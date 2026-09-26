@@ -21,3 +21,4 @@ specifications.
 | [0004](0004-engine-implementation-language.md) | Engine implementation language | Proposed |
 | [0005](0005-zero-dependency-core.md) | Zero-dependency core and layered execution modes | Accepted |
 | [0006](0006-mvp-scope-and-engine.md) | MVP scope and engine selection | Accepted |
+| [0007](0007-post-mvp-integration-surfaces.md) | Post-MVP integration surfaces | Accepted |
