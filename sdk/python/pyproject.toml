@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "actually-fine"
+version = "0.1.0"
+description = "Python authoring SDK for actually-fine data contracts"
+requires-python = ">=3.9"
+license = { file = "../../../LICENSE" }
+
+[tool.setuptools.packages.find]
+where = ["."]

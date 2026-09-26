@@ -75,6 +75,23 @@ Inspect or validate a contract artifact without reading data:
 `validate` checks the IR and prints its stable digest. `inspect` prints the
 canonical normalized JSON used to calculate that digest.
 
+Author a contract from Python without installing the engine:
+
+```python
+from actually_fine import Contract, Predicate, Rule
+
+contract = Contract(
+    "orders",
+    "1",
+    [Rule("email-valid", "$.email", Predicate("format", format="email"), "quarantine")],
+)
+contract.canonical_json()
+```
+
+The dependency-free Python SDK lives in [`sdk/python/`](sdk/python/). It
+compiles to the same canonical IR and produces the same contract digest as the
+Go engine.
+
 ## Why
 
 Data quality tooling should not require a platform before it can validate one
@@ -197,7 +214,10 @@ The initial product is the engine and CLI. Future interfaces may include:
 - CLI for files, streams, and contract artifacts.
 - HTTP or gRPC service mode.
 - Native Brokoli adapter.
-- Python and TypeScript SDKs compiled to the same IR.
+- Python SDK compiled to the same IR (initial authoring surface is available in
+  [`sdk/python/`](sdk/python/)).
+- TypeScript SDK compiled to the same IR (initial authoring surface is available
+  in [`sdk/typescript/`](sdk/typescript/)).
 - Agent-callable interface, potentially through MCP.
 
 SDK work follows the engine. An SDK without a proven engine and product

@@ -73,8 +73,10 @@ quarantined Arrow batches without an NDJSON conversion.
 
 ## SDKs
 
-SDKs are compilers and authoring experiences. They may offer typed builders,
-language-native helpers, and local contract validation, but they must not
+SDKs are compilers and authoring experiences. The initial Python and TypeScript
+surfaces are available under `sdk/`; neither embeds a second rule engine. They
+may offer typed builders, language-native helpers, and local contract validation,
+but they must not
 silently add runtime behavior that cannot be represented in the IR.
 
 An SDK release is ready only when its fixtures match the canonical IR and the
