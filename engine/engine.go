@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/mail"
 	"regexp"
 	"strings"
@@ -214,8 +215,7 @@ func typeMatches(value any, expected string) bool {
 		_, ok := numberValue(value)
 		return ok
 	case "integer":
-		number, ok := numberValue(value)
-		return ok && number == float64(int64(number))
+		return isInteger(value)
 	case "boolean":
 		_, ok := value.(bool)
 		return ok
@@ -230,9 +230,79 @@ func typeMatches(value any, expected string) bool {
 	}
 }
 
+// numberValue reads a record value as a float64 when it is a number of
+// any Go numeric type, or a json.Number that parses.
+//
+// Records do not only come from encoding/json, which is the one source
+// that yields float64 for every number. A Go caller builds a Record with
+// ints; a SQL driver returns int64 for integer columns; a caller that
+// keeps 64-bit values exact decodes whole numbers as int64. Accepting only
+// float64 made every one of those fail range and number/integer checks,
+// reported as a range or type breach for a value that was fine.
+//
+// Range compares in float64, so an integer beyond 2^53 is compared at
+// float64 precision. The bounds are float64 already, so this adds no
+// imprecision the contract did not have.
 func numberValue(value any) (float64, bool) {
-	number, ok := value.(float64)
-	return number, ok
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int8:
+		return float64(v), true
+	case int16:
+		return float64(v), true
+	case int32:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case uint:
+		return float64(v), true
+	case uint8:
+		return float64(v), true
+	case uint16:
+		return float64(v), true
+	case uint32:
+		return float64(v), true
+	case uint64:
+		return float64(v), true
+	case json.Number:
+		f, err := v.Float64()
+		return f, err == nil
+	}
+	return 0, false
+}
+
+// isInteger reports whether a value is an integer.
+//
+// Integer kinds are integers by type and never go through float64: an
+// int64 past 2^53 rounds when converted, and the old check compared a
+// value with its own round trip through int64, which is undefined for a
+// float outside int64's range. A float is an integer only when it is
+// whole and finite.
+func isInteger(value any) bool {
+	switch v := value.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return true
+	case float64:
+		return isWhole(v)
+	case float32:
+		return isWhole(float64(v))
+	case json.Number:
+		if _, err := v.Int64(); err == nil {
+			return true
+		}
+		f, err := v.Float64()
+		return err == nil && isWhole(f)
+	}
+	return false
+}
+
+func isWhole(f float64) bool {
+	return !math.IsInf(f, 0) && !math.IsNaN(f) && f == math.Trunc(f)
 }
 
 func formatMatches(value any, format string) bool {
