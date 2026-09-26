@@ -23,6 +23,9 @@ builds:
 archives:
   - formats:
       - tar.gz
+    files:
+      - README.md
+      - LICENSE*
     format_overrides:
       - goos: windows
         formats:
@@ -40,6 +43,10 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^ci:'
+      - '^chore:'
+      - '^style:'
+      - '^Merge pull request'
+      - '^Merge branch'
 
 release:
   github:
